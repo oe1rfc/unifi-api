@@ -160,6 +160,13 @@ class Controller:
 
         self.opener.open(self.url + 'logout').read()
 
+    def get_sites(self):
+        """Return a list of all Sites (UniFi >= 3.x)."""
+        if(self.version == 'v2'):
+            return None
+
+        return self._read(self.url + 'api/self/sites')
+
     def get_alerts(self):
         """Return a list of all Alerts."""
 
