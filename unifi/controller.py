@@ -79,7 +79,6 @@ class Controller:
         self.password = password
         self.site_id = site_id
         self.url = 'https://' + host + ':' + str(port) + '/'
-        self.api_url = self.url + self._construct_api_path(version)
 
         log.debug('Controller for %s', self.url)
 
@@ -120,7 +119,7 @@ class Controller:
             res = self.opener.open(url, params)
         return self._jsondec(res.read())
 
-    def _construct_api_path(self, version):
+    def _construct_api_path(self, version, site_id):
         """Returns valid base API path based on version given
 
            The base API path for the URL is different depending on UniFi server version.
@@ -128,8 +127,11 @@ class Controller:
 
         """
 
+        if site_id == None:
+            site_id = self.site_id
+
         V2_PATH = 'api/'
-        V3_PATH = 'api/s/' + self.site_id + '/'
+        V3_PATH = 'api/s/' + site_id + '/'
 
         if(version == 'v2'):
             return V2_PATH
@@ -139,6 +141,9 @@ class Controller:
             return V3_PATH
         else:
             return V2_PATH
+
+    def api_url(self, site_id=None):
+        return self.url + self._construct_api_path(self.version, site_id)
 
     def _login(self, version):
         log.debug('login() as %s', self.username)
@@ -170,74 +175,74 @@ class Controller:
     def get_alerts(self):
         """Return a list of all Alerts."""
 
-        return self._read(self.api_url + 'list/alarm')
+        return self._read(self.api_url(site_id) + 'list/alarm')
 
-    def get_alerts_unarchived(self):
+    def get_alerts_unarchived(self, site_id=None):
         """Return a list of Alerts unarchived."""
 
         js = json.dumps({'_sort': '-time', 'archived': False})
         params = urllib.urlencode({'json': js})
-        return self._read(self.api_url + 'list/alarm', params)
+        return self._read(self.api_url(site_id) + 'list/alarm', params)
 
-    def get_statistics_last_24h(self):
+    def get_statistics_last_24h(self, site_id=None):
         """Returns statistical data of the last 24h"""
 
-        return self.get_statistics_24h(time())
+        return self.get_statistics_24h(time(), site_id)
 
-    def get_statistics_24h(self, endtime):
+    def get_statistics_24h(self, endtime, site_id=None):
         """Return statistical data last 24h from time"""
 
         js = json.dumps(
             {'attrs': ["bytes", "num_sta", "time"], 'start': int(endtime - 86400) * 1000, 'end': int(endtime - 3600) * 1000})
         params = urllib.urlencode({'json': js})
-        return self._read(self.api_url + 'stat/report/hourly.system', params)
+        return self._read(self.api_url(site_id) + 'stat/report/hourly.system', params)
 
-    def get_events(self):
+    def get_events(self, site_id=None):
         """Return a list of all Events."""
 
-        return self._read(self.api_url + 'stat/event')
+        return self._read(self.api_url(site_id) + 'stat/event')
 
-    def get_aps(self):
+    def get_aps(self, site_id=None):
         """Return a list of all AP:s, with significant information about each."""
 
         #Set test to 0 instead of NULL
         params = json.dumps({'_depth': 2, 'test': 0})
-        return self._read(self.api_url + 'stat/device', params)
+        return self._read(self.api_url(site_id) + 'stat/device', params)
 
-    def get_clients(self):
+    def get_clients(self, site_id=None):
         """Return a list of all active clients, with significant information about each."""
 
-        return self._read(self.api_url + 'stat/sta')
+        return self._read(self.api_url(site_id) + 'stat/sta')
 
-    def get_users(self):
+    def get_users(self, site_id=None):
         """Return a list of all known clients, with significant information about each."""
 
-        return self._read(self.api_url + 'list/user')
+        return self._read(self.api_url(site_id) + 'list/user')
 
-    def get_user_groups(self):
+    def get_user_groups(self, site_id=None):
         """Return a list of user groups with its rate limiting settings."""
 
-        return self._read(self.api_url + 'list/usergroup')
+        return self._read(self.api_url(site_id) + 'list/usergroup')
 
-    def get_wlan_conf(self):
+    def get_wlan_conf(self, site_id=None):
         """Return a list of configured WLANs with their configuration parameters."""
 
-        return self._read(self.api_url + 'list/wlanconf')
+        return self._read(self.api_url(site_id) + 'list/wlanconf')
 
-    def _run_command(self, command, params={}, mgr='stamgr'):
+    def _run_command(self, command, params={}, mgr='stamgr', site_id=None):
         log.debug('_run_command(%s)', command)
         params.update({'cmd': command})
         if PYTHON_VERSION == 2:
-            return self._read(self.api_url + 'cmd/' + mgr, urllib.urlencode({'json': json.dumps(params)}))
+            return self._read(self.api_url(site_id) + 'cmd/' + mgr, urllib.urlencode({'json': json.dumps(params)}))
         elif PYTHON_VERSION == 3:
-            return self._read(self.api_url + 'cmd/' + mgr, urllib.parse.urlencode({'json': json.dumps(params)}))
+            return self._read(self.api_url(site_id) + 'cmd/' + mgr, urllib.parse.urlencode({'json': json.dumps(params)}))
 
-    def _mac_cmd(self, target_mac, command, mgr='stamgr'):
-        log.debug('_mac_cmd(%s, %s)', target_mac, command)
+    def _mac_cmd(self, target_mac, command, mgr='stamgr', site_id=None):
+        log.debug('_mac_cmd(%s, %s, %s)', target_mac, command, site_id)
         params = {'mac': target_mac}
-        self._run_command(command, params, mgr)
+        self._run_command(command, params, mgr, site_id=site_id)
 
-    def block_client(self, mac):
+    def block_client(self, mac, site_id=None):
         """Add a client to the block list.
 
         Arguments:
@@ -245,9 +250,9 @@ class Controller:
 
         """
 
-        self._mac_cmd(mac, 'block-sta')
+        self._mac_cmd(mac, 'block-sta', site_id=None)
 
-    def unblock_client(self, mac):
+    def unblock_client(self, mac, site_id=None):
         """Remove a client from the block list.
 
         Arguments:
@@ -255,9 +260,9 @@ class Controller:
 
         """
 
-        self._mac_cmd(mac, 'unblock-sta')
+        self._mac_cmd(mac, 'unblock-sta', site_id=None)
 
-    def disconnect_client(self, mac):
+    def disconnect_client(self, mac, site_id=None):
         """Disconnect a client.
 
         Disconnects a client, forcing them to reassociate. Useful when the
@@ -268,9 +273,9 @@ class Controller:
 
         """
 
-        self._mac_cmd(mac, 'kick-sta')
+        self._mac_cmd(mac, 'kick-sta', site_id=None)
 
-    def restart_ap(self, mac):
+    def restart_ap(self, mac, site_id=None):
         """Restart an access point (by MAC).
 
         Arguments:
@@ -278,9 +283,9 @@ class Controller:
 
         """
 
-        self._mac_cmd(mac, 'restart', 'devmgr')
+        self._mac_cmd(mac, 'restart', 'devmgr', site_id=None)
 
-    def restart_ap_name(self, name):
+    def restart_ap_name(self, name, site_id=None):
         """Restart an access point (by name).
 
         Arguments:
@@ -292,16 +297,16 @@ class Controller:
             raise APIError('%s is not a valid name' % str(name))
         for ap in self.get_aps():
             if ap.get('state', 0) == 1 and ap.get('name', None) == name:
-                self.restart_ap(ap['mac'])
+                self.restart_ap(ap['mac'], site_id=site_id)
 
-    def archive_all_alerts(self):
+    def archive_all_alerts(self, site_id=None):
         """Archive all Alerts
         """
         js = json.dumps({'cmd': 'archive-all-alarms'})
         params = urllib.urlencode({'json': js})
-        answer = self._read(self.api_url + 'cmd/evtmgr', params)
+        answer = self._read(self.api_url(site_id) + 'cmd/evtmgr', params)
 
-    def create_backup(self):
+    def create_backup(self, site_id=None):
         """Ask controller to create a backup archive file, response contains the path to the backup file.
 
         Warning: This process puts significant load on the controller may
@@ -310,18 +315,18 @@ class Controller:
 
         js = json.dumps({'cmd': 'backup'})
         params = urllib.urlencode({'json': js})
-        answer = self._read(self.api_url + 'cmd/system', params)
+        answer = self._read(self.api_url(site_id) + 'cmd/system', params)
 
         return answer[0].get('url')
 
-    def get_backup(self, target_file='unifi-backup.unf'):
+    def get_backup(self, target_file='unifi-backup.unf', site_id=None):
         """Get a backup archive from a controller.
 
         Arguments:
             target_file -- Filename or full path to download the backup archive to, should have .unf extension for restore.
 
         """
-        download_path = self.create_backup()
+        download_path = self.create_backup(site_id=site_id)
 
         opener = self.opener.open(self.url + download_path)
         unifi_archive = opener.read()
@@ -330,7 +335,7 @@ class Controller:
         backupfile.write(unifi_archive)
         backupfile.close()
 
-    def authorize_guest(self, guest_mac, minutes, up_bandwidth=None, down_bandwidth=None, byte_quota=None, ap_mac=None):
+    def authorize_guest(self, guest_mac, minutes, up_bandwidth=None, down_bandwidth=None, byte_quota=None, ap_mac=None, site_id=None):
         """
         Authorize a guest based on his MAC address.
 
@@ -354,9 +359,9 @@ class Controller:
         if ap_mac and self.version != 'v2':
             js['ap_mac'] = ap_mac
 
-        return self._run_command(cmd, params=js)
+        return self._run_command(cmd, params=js, site_id=site_id)
 
-    def unauthorize_guest(self, guest_mac):
+    def unauthorize_guest(self, guest_mac, site_id=None):
         """
         Unauthorize a guest based on his MAC address.
 
@@ -366,4 +371,4 @@ class Controller:
         cmd = 'unauthorize-guest'
         js = {'mac': guest_mac}
 
-        return self._run_command(cmd, params=js)
+        return self._run_command(cmd, params=js, site_id=site_id)
