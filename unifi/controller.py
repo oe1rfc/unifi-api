@@ -116,7 +116,12 @@ class Controller:
             else:
                 res = self.opener.open(url)
         elif PYTHON_VERSION == 2:
-            res = self.opener.open(url, params)
+            try:
+                res = self.opener.open(url, params)
+            except urllib2.HTTPError, e:
+                if e.code == 401:
+                    self._login(self.version)
+                    res = self.opener.open(url, params)
         return self._jsondec(res.read())
 
     def _construct_api_path(self, version, site_id):
